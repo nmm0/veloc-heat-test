@@ -5,7 +5,6 @@
 #include "heatdis.hpp"
 #include "include/veloc.h"
 
-/* added by Carson */
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -23,42 +22,60 @@
 
 static const unsigned int CKPT_FREQ = ITER_TIMES / 3;
 
-void initData(int nbLines, int M, int rank, double *h) {
-    int i, j;
-    for (i = 0; i < nbLines; i++) {
-        for (j = 0; j < M; j++) {
-            h[(i*M)+j] = 0;
+void initKokkosData(int nbLines, int M, int rank, Kokkos::View<double*> h) {
+
+    typedef Kokkos::RangePolicy<> range_policy;    
+    typedef Kokkos::MDRangePolicy<Kokkos::Rank<2>> mdrange_policy;
+
+    /* set all of the data to 0 */
+    Kokkos::parallel_for("init_h", mdrange_policy({0,0}, {nbLines, M}), 
+                         KOKKOS_LAMBDA (const int i, const int j) {
+            h((i*M)+j) = 0;
         }
-    }
+    );
+
+    /* initialize some values on rank 0 to 100 */
     if (rank == 0) {
-        for (j = (M*0.1); j < (M*0.9); j++) {
-            h[j] = 100;
-        }
+        int j = ceil(M * 0.9);
+        Kokkos::parallel_for("init_rank0", range_policy((int)(M*0.1), j),
+                             KOKKOS_LAMBDA (const int i) {
+                h(i) = 100;
+            }
+        );
     }
 }
 
-double doWork(int numprocs, int rank, int M, int nbLines, double *g, double *h) {
-    int i,j;
+double doKokkosWork(int numprocs, int rank, int M, int nbLines, 
+                    Kokkos::View<double*> g, Kokkos::View<double*> h) {
+
     MPI_Request req1[2], req2[2];
     MPI_Status status1[2], status2[2];
     double localerror;
     localerror = 0;
-    for(i = 0; i < nbLines; i++) {
-        for(j = 0; j < M; j++) {
-            h[(i*M)+j] = g[(i*M)+j];
+
+    typedef Kokkos::RangePolicy<> range_policy;    
+    typedef Kokkos::MDRangePolicy<Kokkos::Rank<2>> mdrange_policy;
+
+    Kokkos::parallel_for("copy_g", mdrange_policy({0,0}, {nbLines, M}), 
+                         KOKKOS_LAMBDA (const int i, const int j) {
+            h((i*M)+j) = g((i*M)+j);  
         }
-    }
-  
+    );
+ 
+    double *g_raw = g.data();
+    double *h_raw = h.data();
+ 
     /* Send and receive data from the left -- all ranks besides 0 because there are no ranks to its left */
     if (rank > 0) {
-        MPI_Isend(g+M, M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[0]);
-        MPI_Irecv(h,   M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[1]);
+        MPI_Isend(g_raw+M, M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[0]);
+        MPI_Irecv(h_raw,   M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[1]);
     }
 
-    /* Send and receive data from the right -- all ranks besides numprocs - 1 because there are no ranks to its right */
+    /* Send and receive data from the right -- all ranks besides numprocs - 1 
+     * because there are no ranks to its right */
     if (rank < numprocs - 1) {
-        MPI_Isend(g+((nbLines-2)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[0]);
-        MPI_Irecv(h+((nbLines-1)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[1]);
+        MPI_Isend(g_raw+((nbLines-2)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[0]);
+        MPI_Irecv(h_raw+((nbLines-1)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[1]);
     }
 
     if (rank > 0) {
@@ -69,27 +86,31 @@ double doWork(int numprocs, int rank, int M, int nbLines, double *g, double *h) 
     }
 
     /* perform the computation */
-    for(i = 1; i < (nbLines-1); i++) {
-        for(j = 0; j < M; j++) {
-            g[(i*M)+j] = 0.25*(h[((i-1)*M)+j]+h[((i+1)*M)+j]+h[(i*M)+j-1]+h[(i*M)+j+1]);
-            if(localerror < fabs(g[(i*M)+j] - h[(i*M)+j])) {
-                localerror = fabs(g[(i*M)+j] - h[(i*M)+j]);
+    Kokkos::parallel_for("compute", mdrange_policy({1,0}, {nbLines-1, M}),
+                         [&localerror, &g, h, M] (const int i, const int j) {
+            g((i*M)+j) = 0.25*(h(((i-1)*M)+j)+h(((i+1)*M)+j)+h((i*M)+j-1)+h((i*M)+j+1));
+            if(localerror < fabs(g((i*M)+j) - h((i*M)+j))) {
+                localerror = fabs(g((i*M)+j) - h((i*M)+j));
             }
         }
-    }
+    );
 
     /* perform computation on right-most rank */
     if (rank == (numprocs-1)) {
-        for(j = 0; j < M; j++) {
-            g[((nbLines-1)*M)+j] = g[((nbLines-2)*M)+j];
-        }
+        Kokkos::parallel_for("compute_right", range_policy(0,M),
+                             [&g, nbLines, M] (const int j) {
+                g(((nbLines-1)*M)+j) = g(((nbLines-2)*M)+j);
+            }
+        );
+
     }
+
     return localerror;
 }
 
 int main(int argc, char *argv[]) {
     int rank, nbProcs, nbLines, i, M, arg;
-    double wtime, *h, *g, memSize, localerror, globalerror = 1;
+    double wtime, memSize, localerror, globalerror = 1;
 
     if (argc < 3) {
 	printf("Usage: %s <mem_in_mb> <cfg_file>\n", argv[0]);
@@ -115,13 +136,13 @@ int main(int argc, char *argv[]) {
 
     M = (int)sqrt((double)(arg * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double))); // two matrices needed
     nbLines = (M / nbProcs) + 3;
-    h = (double *) malloc(sizeof(double *) * M * nbLines);
-    g = (double *) malloc(sizeof(double *) * M * nbLines);
-    initData(nbLines, M, rank, g);
-    memSize = M * nbLines * 2 * sizeof(double) / (1024 * 1024);
 
     Kokkos::View<double*> h_view("h", M * nbLines);
     Kokkos::View<double*> g_view("g", M * nbLines);
+
+    initKokkosData(nbLines, M, rank, g_view);
+
+    memSize = M * nbLines * 2 * sizeof(double) / (1024 * 1024);
 
     if (rank == 0)
 	printf("Local data size is %d x %d = %f MB (%d).\n", M, nbLines, memSize, arg);
@@ -131,8 +152,8 @@ int main(int argc, char *argv[]) {
 	printf("Maximum number of iterations : %d \n", ITER_TIMES);
 
     VELOC_Mem_protect(0, &i, 1, sizeof(int));
-    VELOC_Mem_protect(1, h, M * nbLines, sizeof(double));
-    VELOC_Mem_protect(2, g, M * nbLines, sizeof(double));
+    VELOC_Mem_protect(1, h_view.data(), M * nbLines, sizeof(double));
+    VELOC_Mem_protect(2, g_view.data(), M * nbLines, sizeof(double));
 
     wtime = MPI_Wtime();
     int v = VELOC_Restart_test("heatdis", 0);
@@ -143,10 +164,9 @@ int main(int argc, char *argv[]) {
     } else
 	i = 0;
     while(i < ITER_TIMES) {
-        localerror = doWork(nbProcs, rank, M, nbLines, g, h);
+        localerror = doKokkosWork(nbProcs, rank, M, nbLines, g_view, h_view);
         if (((i % ITER_OUT) == 0) && (rank == 0))
 	    printf("Step : %d, error = %f\n", i, globalerror);
-        //if ((i % REDUCE) == 0)
         if ((i % REDUCED) == 0)
 	    MPI_Allreduce(&localerror, &globalerror, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
         if (globalerror < PRECISION)
@@ -154,17 +174,14 @@ int main(int argc, char *argv[]) {
 	i++;
 	if (i % CKPT_FREQ == 0) {
 	    assert(VELOC_Checkpoint("heatdis", i) == VELOC_SUCCESS);
-            if (i != 0 && i != ITER_TIMES) {
+            /*if (i != 0 && i != ITER_TIMES) {
                printf("rank: %d ---- i: %d\n", rank, i);
                MPI_Abort(MPI_COMM_WORLD, 420);
-            }
+            }*/
         }
     }
     if (rank == 0)
 	printf("Execution finished in %lf seconds.\n", MPI_Wtime() - wtime);
-
-    free(h);
-    free(g);
 
     /* call to finalize Kokkos */
     }
