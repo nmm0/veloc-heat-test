@@ -3,13 +3,14 @@
 #include <math.h>
 
 #include "heatdis.hpp"
-#include "include/veloc.h"
+//#include "include/veloc.h"
 
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include <Kokkos_Core.hpp>
+#include <veloc.h>
 
 // this examples uses asserts so they need to be activated
 #undef NDEBUG
