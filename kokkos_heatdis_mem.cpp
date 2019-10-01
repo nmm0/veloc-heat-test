@@ -173,12 +173,11 @@ int main(int argc, char *argv[]) {
         if (globalerror < PRECISION)
 	    break;
 	i++;
-	if (i % CKPT_FREQ == 0) {
+	if (i % CKPT_FREQ == 0 && i != ITER_TIMES) {
 	    assert(VELOC_Checkpoint("heatdis", i) == VELOC_SUCCESS);
-            /*if (i != 0 && i != ITER_TIMES) {
-               printf("rank: %d ---- i: %d\n", rank, i);
-               MPI_Abort(MPI_COMM_WORLD, 420);
-            }*/
+            if (rank == 0) {
+               printf("checkpoint rank: %d ---- i: %d\n", rank, i);
+            }
         }
     }
     if (rank == 0)
