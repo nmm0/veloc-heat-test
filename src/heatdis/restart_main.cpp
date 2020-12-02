@@ -28,10 +28,10 @@ int main(int argc, char *argv[]) {
              ("n,nsteps", "Number of timesteps", cxxopts::value<std::size_t>()->default_value("600"))
              ("p,precision", "Min precision", cxxopts::value<double>()->default_value("0.00001"))
              ("c,checkpoint-interval", "Checkpoint interval", cxxopts::value<int>()->default_value("100"))
+             ("fail", "Fail iteration or negative for no fail", cxxopts::value<int>()->default_value("301"))
+             ("fail-rank", "Rank to fail if failing", cxxopts::value<int>()->default_value("0"))
              ("config", "Config file", cxxopts::value<std::string>())
              ("scale", "Weak or strong scaling", cxxopts::value<std::string>())
-             ("fail", "Fail iteration or negative for no fail", cxxopts::value<int>()->default_value(301))
-             ("fail-rank" "Rank to fail if failing", cxxopts::value<int>()->default_value(0))
              ;
 
   options.parse_positional({"config"});
