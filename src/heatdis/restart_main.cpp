@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 
     // if (rank == 0 && i == 301 && v < 0) {
     if ((fail_iter >= 0 ) && (rank == fail_rank) && (i == fail_iter) && (v < 0)) {
-      printf("Killing rank 1 at i == 301.\n");
+      printf("Killing rank %d at i == %d.\n", rank, i);
       MPI_Abort(MPI_COMM_WORLD, 400);
     }
   }
