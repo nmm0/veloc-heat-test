@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
              ("c,checkpoint-interval", "Checkpoint interval", cxxopts::value<int>()->default_value("100"))
              ("config", "Config file", cxxopts::value<std::string>())
              ("scale", "Weak or strong scaling", cxxopts::value<std::string>())
+             ("views", "Number of Kokkos Views", cxxopts::value<std::size_t>()->default_value("1"))
              ;
 
   options.parse_positional({"config"});
@@ -35,6 +36,7 @@ int main(int argc, char *argv[]) {
   std::size_t nsteps = args["nsteps"].as< std::size_t >();
   const auto precision = args["precision"].as< double >();
   const auto chk_interval = args["checkpoint-interval"].as< int >();
+  const auto num_views =  args["views"].as< std::size_t >();
 
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &nbProcs);
