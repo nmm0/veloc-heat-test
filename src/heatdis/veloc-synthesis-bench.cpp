@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
 
   int i;
   VELOC_Mem_protect(0, &i, 1, sizeof(int));
-  for( int jj = 0 jj < num_views; ++jj )
+  for( int jj = 0; jj < num_views; ++jj )
   {
      VELOC_Mem_protect(jj+1, MyViews[jj].data(), M * nbLines, sizeof(double));
   }
