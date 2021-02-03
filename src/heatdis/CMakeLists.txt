@@ -4,17 +4,9 @@ target_sources(heatdis_resil PRIVATE
     )
 target_sources(heatdis_veloc PRIVATE
     heatdis.cpp
-    veloc-main.cpp
+    veloc_main.cpp
     )
-target_sources(benchmark_veloc PRIVATE
+target_sources(heatdis_synthesis_benchmark PRIVATE
     heatdis.cpp
     veloc-synthesis-bench.cpp 
-    )
-target_sources(heatdis_restart_resil PRIVATE
-    heatdis.cpp
-    restart_main.cpp
-    )
-target_sources(heatdis_restart_veloc PRIVATE
-    heatdis.cpp
-    veloc_restart.cpp
     )

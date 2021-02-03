@@ -25,6 +25,8 @@ int main(int argc, char *argv[]) {
              ("n,nsteps", "Number of timesteps", cxxopts::value<std::size_t>()->default_value("600"))
              ("p,precision", "Min precision", cxxopts::value<double>()->default_value("0.00001"))
              ("c,checkpoint-interval", "Checkpoint interval", cxxopts::value<int>()->default_value("100"))
+             ("fail", "Fail iteration or negative for no fail", cxxopts::value<int>()->default_value("-1"))
+             ("fail-rank", "Rank to fail if failing", cxxopts::value<int>()->default_value("0"))
              ("config", "Config file", cxxopts::value<std::string>())
              ("scale", "Weak or strong scaling", cxxopts::value<std::string>())
              ;
@@ -35,12 +37,8 @@ int main(int argc, char *argv[]) {
   std::size_t nsteps = args["nsteps"].as< std::size_t >();
   const auto precision = args["precision"].as< double >();
   const auto chk_interval = args["checkpoint-interval"].as< int >();
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &nbProcs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-  std::size_t mem_size = args["size"].as< std::size_t >();
+  const int fail_iter = args["fail"].as< int >();
+  const int fail_rank = args["fail-rank"].as< int >();
 
   int strong, str_ret;
 
@@ -51,6 +49,12 @@ int main(int argc, char *argv[]) {
   } else {
     strong = 0;
   }
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &nbProcs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  std::size_t mem_size = args["size"].as< std::size_t >();
 
   if (mem_size == 0) {
     printf("Wrong memory size! See usage\n");
@@ -63,7 +67,7 @@ int main(int argc, char *argv[]) {
 
   Kokkos::initialize(argc, argv);
   {
-
+  
   if (!strong) {
 
     /* weak scaling */
@@ -72,8 +76,8 @@ int main(int argc, char *argv[]) {
   } else {
 
     /* strong scaling */
-     M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double) * nbProcs)); // two matrices needed
-     nbLines = (M / nbProcs) + 3;
+    M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double) * nbProcs)); // two matrices needed
+    nbLines = (M / nbProcs) + 3;
   }
 
   Kokkos::View<double*> h_view("h", M * nbLines);
@@ -105,11 +109,25 @@ int main(int argc, char *argv[]) {
     printf("Previous checkpoint found at iteration %d, initiating restart...\n", v);
     // v can be any version, independent of what VELOC_Restart_test is returning
     assert(VELOC_Restart("heatdis", v) == VELOC_SUCCESS);
+
+    /* Added by Carson on 5/6/20 to test VeloC Restart */
+    i++;
+    //printf("Test v - %d\n", v);
+
   } else {
     i = 0;
+  } 
+
+  /* May need to be added to be consistent with Resilient Kokkos */
+  //i++;
+  if (rank == 0) {
+    //printf("Initial i value: %d\n", i);
   }
 
   while(i < nsteps) {
+    if (rank == 0) {
+      //printf("Loop i value: %d\n", i);
+    }
     localerror = doWork(nbProcs, rank, M, nbLines, g_view, h_view);
 
     if (((i % ITER_OUT) == 0) && (rank == 0)) {
@@ -129,13 +147,20 @@ int main(int argc, char *argv[]) {
      */
     //i++;
 
-    if (!(i % chk_interval) && (i != nsteps)) {
+    if (!(i % chk_interval) && (i != nsteps) && (i != v)) {
       assert(VELOC_Checkpoint("heatdis", i) == VELOC_SUCCESS);
       if (rank == 0) {
         printf("checkpoint rank: %d ---- i: %d\n", rank, i);
       }
     }
     i++;
+
+    /* Add code to kill MPI processes */
+    // if (rank == 0 && i == 301 && v <= 0) {
+    if ((fail_iter >= 0 ) && (rank == fail_rank) && (i == fail_iter) && (v <= 0)) {
+      printf("Killing rank %d at i == %d. Program should terminate.\n", rank, i);
+      MPI_Abort(MPI_COMM_WORLD, 400);
+    }
   }
   if (rank == 0)
     printf("Execution finished in %lf seconds.\n", MPI_Wtime() - wtime);

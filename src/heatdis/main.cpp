@@ -6,6 +6,11 @@
 #include "heatdis.hpp"
 #include <resilience/CheckpointFilter.hpp>
 
+/* Added to test restart */
+#include <signal.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 using namespace heatdis;
 
 /*
@@ -23,6 +28,8 @@ int main(int argc, char *argv[]) {
              ("n,nsteps", "Number of timesteps", cxxopts::value<std::size_t>()->default_value("600"))
              ("p,precision", "Min precision", cxxopts::value<double>()->default_value("0.00001"))
              ("c,checkpoint-interval", "Checkpoint interval", cxxopts::value<int>()->default_value("100"))
+             ("fail", "Fail iteration or negative for no fail", cxxopts::value<int>()->default_value("-1"))
+             ("fail-rank", "Rank to fail if failing", cxxopts::value<int>()->default_value("0"))
              ("config", "Config file", cxxopts::value<std::string>())
              ("scale", "Weak or strong scaling", cxxopts::value<std::string>())
              ;
@@ -33,6 +40,8 @@ int main(int argc, char *argv[]) {
   std::size_t nsteps = args["nsteps"].as< std::size_t >();
   const auto precision = args["precision"].as< double >();
   const auto chk_interval = args["checkpoint-interval"].as< int >();
+  const int fail_iter = args["fail"].as< int >();
+  const int fail_rank = args["fail-rank"].as< int >();
 
   int strong, str_ret;
 
@@ -66,6 +75,7 @@ int main(int argc, char *argv[]) {
     /* weak scaling */
     M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double))); // two matrices needed
     nbLines = (M / nbProcs) + 3;
+
   } else {
 
     /* strong scaling */
@@ -80,6 +90,9 @@ int main(int argc, char *argv[]) {
 
   memSize = M * nbLines * 2 * sizeof(double) / (1024 * 1024);
 
+  // printf("nbProcs: %d\n", nbProcs);
+  // printf("size of double: %d\n", sizeof(double));
+
   if (rank == 0)
     if (!strong) {
       printf("Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size);
@@ -92,7 +105,13 @@ int main(int argc, char *argv[]) {
     printf("Maximum number of iterations : %lu \n", nsteps);
 
   wtime = MPI_Wtime();
-  int i = 1 + KokkosResilience::latest_version(*ctx, "test_kokkos");
+  //int i = 1 + KokkosResilience::latest_version(*ctx, "test_kokkos");
+  int i = KokkosResilience::latest_version(*ctx, "test_kokkos");
+  int v = i;
+  printf("i: %d --- v: %d\n", i, v);
+  if (i < 0) {
+    i = 0;
+  }
 
   while(i < nsteps) {
 
@@ -113,6 +132,12 @@ int main(int argc, char *argv[]) {
       break;
     }
     i++;
+
+    // if (rank == 0 && i == 301 && v < 0) {
+    if ((fail_iter >= 0 ) && (rank == fail_rank) && (i == fail_iter) && (v < 0)) {
+      printf("Killing rank %d at i == %d.\n", rank, i);
+      MPI_Abort(MPI_COMM_WORLD, 400);
+    }
   }
   if (rank == 0)
     printf("Execution finished in %lf seconds.\n", MPI_Wtime() - wtime);
