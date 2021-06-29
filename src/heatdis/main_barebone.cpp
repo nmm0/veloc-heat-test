@@ -27,9 +27,6 @@ int main(int argc, char *argv[]) {
              ("s,size", "Problem size", cxxopts::value<std::size_t>()->default_value("100"))
              ("n,nsteps", "Number of timesteps", cxxopts::value<std::size_t>()->default_value("600"))
              ("p,precision", "Min precision", cxxopts::value<double>()->default_value("0.00001"))
-             ("c,checkpoint-interval", "Checkpoint interval", cxxopts::value<int>()->default_value("100"))
-             ("fail", "Fail iteration or negative for no fail", cxxopts::value<int>()->default_value("-1"))
-             ("fail-rank", "Rank to fail if failing", cxxopts::value<int>()->default_value("0"))
              ("config", "Config file", cxxopts::value<std::string>())
              ("scale", "Weak or strong scaling", cxxopts::value<std::string>())
              ;
@@ -39,9 +36,6 @@ int main(int argc, char *argv[]) {
 
   std::size_t nsteps = args["nsteps"].as< std::size_t >();
   const auto precision = args["precision"].as< double >();
-  const auto chk_interval = args["checkpoint-interval"].as< int >();
-  const int fail_iter = args["fail"].as< int >();
-  const int fail_rank = args["fail-rank"].as< int >();
 
   int strong, str_ret;
 

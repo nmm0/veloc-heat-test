@@ -10,3 +10,7 @@ target_sources(heatdis_synthesis_benchmark PRIVATE
     heatdis.cpp
     veloc-synthesis-bench.cpp 
     )
+target_sources(heatdis_barebone PRIVATE
+    heatdis.cpp
+    main_barebone.cpp
+)
