@@ -4,13 +4,13 @@ namespace heatdis
 {
   void initData(int nbLines, int M, int rank, Kokkos::View<double*> h) {
 
-    typedef Kokkos::RangePolicy<> range_policy;
-    typedef Kokkos::MDRangePolicy<Kokkos::Rank<2>> mdrange_policy;
+    using range_policy = Kokkos::RangePolicy<>;
 
     /* set all of the data to 0 */
-    Kokkos::parallel_for("init_h", mdrange_policy({0,0}, {nbLines, M}),
-                         KOKKOS_LAMBDA (const int i, const int j) {
-      h((i*M)+j) = 0;
+    int len = nbLines * M;
+    Kokkos::parallel_for("init_h", range_policy (0, len),
+                         KOKKOS_LAMBDA (int i) {
+      h(i) = 0;
     }
     );
 
@@ -34,11 +34,11 @@ namespace heatdis
     localerror = 0;
 
     using range_policy = Kokkos::RangePolicy<>;
-    using mdrange_policy = Kokkos::MDRangePolicy<Kokkos::Rank<2>>;
 
-    Kokkos::parallel_for("copy_g", mdrange_policy({0,0}, {nbLines, M}),
-                         KOKKOS_LAMBDA (const int i, const int j) {
-      h((i*M)+j) = g((i*M)+j);
+    int len = nbLines * M;
+    Kokkos::parallel_for("copy_g", range_policy(0, len),
+                         KOKKOS_LAMBDA (int i) {
+      h(i) = g(i);
     }
     );
 
@@ -69,11 +69,12 @@ namespace heatdis
     }
 
     /* perform the computation */
-    Kokkos::parallel_for("compute", mdrange_policy({1,0}, {nbLines-1, M}),
-                         [&localerror, &g, h, M] (const int i, const int j) {
-                           g((i*M)+j) = 0.25*(h(((i-1)*M)+j)+h(((i+1)*M)+j)+h((i*M)+j-1)+h((i*M)+j+1));
-                           if(localerror < fabs(g((i*M)+j) - h((i*M)+j))) {
-                             localerror = fabs(g((i*M)+j) - h((i*M)+j));
+    //mdrange_policy({1,0}, {nbLines-1, M})
+    Kokkos::parallel_for("compute", range_policy(M, len - M),
+                         [&localerror, &g, h, M] (int i) {
+                           g(i) = 0.25 * (h(i - M) + h(i + M) + h(i-1) + h(i+1));
+                           if(localerror < fabs(g(i) - h(i))) {
+                             localerror = fabs(g(i) - h(i));
                            }
                          }
     );

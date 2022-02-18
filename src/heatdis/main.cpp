@@ -43,14 +43,12 @@ int main(int argc, char *argv[]) {
   const int fail_iter = args["fail"].as< int >();
   const int fail_rank = args["fail-rank"].as< int >();
 
-  int strong, str_ret;
+  bool strong, str_ret;
 
-  std::string scale;
-  scale = args["scale"].as< std::string >();
-  if (scale == "strong") {
-    strong = 1;
+  if (args.count("scale") > 0 && args["scale"].as< std::string >() == "strong") {
+    strong = true;
   } else {
-    strong = 0;
+    strong = false;
   }
 
   MPI_Init(&argc, &argv);
@@ -93,12 +91,13 @@ int main(int argc, char *argv[]) {
   // printf("nbProcs: %d\n", nbProcs);
   // printf("size of double: %d\n", sizeof(double));
 
-  if (rank == 0)
-    if (!strong) {
-      printf("Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size);
+  if (rank == 0) {
+    if ( !strong ) {
+      printf( "Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size );
     } else {
-      printf("Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size / nbProcs);
+      printf( "Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size / nbProcs );
     }
+  }
   if (rank == 0)
     printf("Target precision : %f \n", precision);
   if (rank == 0)

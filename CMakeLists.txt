@@ -25,6 +25,7 @@ target_link_libraries(heatdis_synthesis_benchmark PRIVATE Kokkos::resilience)
 
 find_package(VeloC REQUIRED)
 target_link_libraries(heatdis_veloc PRIVATE veloc::veloc)
+target_link_libraries(heatdis_synthesis_benchmark PRIVATE veloc::veloc)
 
 add_subdirectory(tpl)
 
