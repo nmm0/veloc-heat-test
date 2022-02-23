@@ -4,12 +4,7 @@
 #include <resilience/Resilience.hpp>
 
 #include "heatdis.hpp"
-#include <resilience/CheckpointFilter.hpp>
-
-/* Added to test restart */
-#include <signal.h>
-#include <sys/types.h>
-#include <unistd.h>
+//#include <resilience/CheckpointFilter.hpp>
 
 using namespace heatdis;
 
@@ -64,10 +59,6 @@ int main(int argc, char *argv[]) {
 
   Kokkos::initialize(argc, argv);
   {
-  auto ctx = KokkosResilience::make_context( MPI_COMM_WORLD, args["config"].as< std::string >() );
-
-  const auto filt = KokkosResilience::Filter::NthIterationFilter( chk_interval );
-
   if (!strong) {
 
     /* weak scaling */
@@ -104,8 +95,7 @@ int main(int argc, char *argv[]) {
     printf("Maximum number of iterations : %lu \n", nsteps);
 
   wtime = MPI_Wtime();
-  //int i = 1 + KokkosResilience::latest_version(*ctx, "test_kokkos");
-  int i = KokkosResilience::latest_version(*ctx, "test_kokkos");
+  int i = 0;
   int v = i;
   printf("i: %d --- v: %d\n", i, v);
   if (i < 0) {
@@ -114,17 +104,14 @@ int main(int argc, char *argv[]) {
 
   while(i < nsteps) {
 
-    KokkosResilience::checkpoint(*ctx, "test_kokkos", i, [&localerror, i, &globalerror,
-                                                         g_view, h_view, nbProcs, rank, M, nbLines]() {
-      localerror = doWork(nbProcs, rank, M, nbLines, g_view, h_view);
+    localerror = doWork(nbProcs, rank, M, nbLines, g_view, h_view);
 
-      if (((i % ITER_OUT) == 0) && (rank == 0)) {
-        printf("Step : %d, error = %f\n", i, globalerror);
-      }
-      if ((i % REDUCED) == 0) {
-        MPI_Allreduce(&localerror, &globalerror, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-      }
-    }, filt );
+    if (((i % ITER_OUT) == 0) && (rank == 0)) {
+      printf("Step : %d, error = %f\n", i, globalerror);
+    }
+    if ((i % REDUCED) == 0) {
+      MPI_Allreduce(&localerror, &globalerror, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    }
 
     if (globalerror < precision) {
       printf("PRECISION ERROR\n");
