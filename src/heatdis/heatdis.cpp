@@ -27,9 +27,6 @@ namespace heatdis
 
   double doWork(int numprocs, int rank, int M, int nbLines,
                       Kokkos::View<double*> g, Kokkos::View<double*> h) {
-
-    MPI_Request req1[2], req2[2];
-    MPI_Status status1[2], status2[2];
     double localerror;
     localerror = 0;
 
@@ -41,32 +38,6 @@ namespace heatdis
       h(i) = g(i);
     }
     );
-
-    double *g_raw = g.data();
-    double *h_raw = h.data();
-
-    /* Send and receive data from the left -- all ranks besides 0 because there are no ranks to its left */
-    if (rank > 0) {
-      MPI_Isend(g_raw+M, M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[0]);
-      MPI_Irecv(h_raw,   M, MPI_DOUBLE, rank-1, WORKTAG, MPI_COMM_WORLD, &req1[1]);
-    }
-
-    /* Send and receive data from the right -- all ranks besides numprocs - 1
-     * because there are no ranks to its right */
-    if (rank < numprocs - 1) {
-      MPI_Isend(g_raw+((nbLines-2)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[0]);
-      MPI_Irecv(h_raw+((nbLines-1)*M), M, MPI_DOUBLE, rank+1, WORKTAG, MPI_COMM_WORLD, &req2[1]);
-    }
-
-    /* this should probably include ALL ranks 
-     * (currently excludes leftmost and rightmost)
-     */
-    if (rank > 0) {
-      MPI_Waitall(2,req1,status1);
-    }
-    if (rank < numprocs - 1) {
-      MPI_Waitall(2,req2,status2);
-    }
 
     /* perform the computation */
     //mdrange_policy({1,0}, {nbLines-1, M})

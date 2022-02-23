@@ -1,5 +1,4 @@
 #include <cxxopts/cxxopts.hpp>
-#include <mpi.h>
 #include <Kokkos_Core.hpp>
 #include <resilience/Resilience.hpp>
 
@@ -14,7 +13,7 @@ using namespace heatdis;
 */
 
 int main(int argc, char *argv[]) {
-  int rank, nbProcs, nbLines, M;
+  int nbLines, M;
   double wtime, memSize, localerror, globalerror = 1;
 
   auto options = cxxopts::Options("heatdis", "Sample heat distribution code");
@@ -34,9 +33,6 @@ int main(int argc, char *argv[]) {
 
   std::size_t nsteps = args["nsteps"].as< std::size_t >();
   const auto precision = args["precision"].as< double >();
-  const auto chk_interval = args["checkpoint-interval"].as< int >();
-  const int fail_iter = args["fail"].as< int >();
-  const int fail_rank = args["fail-rank"].as< int >();
 
   bool strong, str_ret;
 
@@ -45,10 +41,6 @@ int main(int argc, char *argv[]) {
   } else {
     strong = false;
   }
-
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &nbProcs);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   std::size_t mem_size = args["size"].as< std::size_t >();
 
@@ -59,42 +51,25 @@ int main(int argc, char *argv[]) {
 
   Kokkos::initialize(argc, argv);
   {
-  if (!strong) {
-
-    /* weak scaling */
-    M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double))); // two matrices needed
-    nbLines = (M / nbProcs) + 3;
-
-  } else {
-
-    /* strong scaling */
-    M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0 * nbProcs) / (2 * sizeof(double) * nbProcs)); // two matrices needed
-    nbLines = (M / nbProcs) + 3;
-  }
+  M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0) / (2 * sizeof(double))); // two matrices needed
+  nbLines = M + 3;
 
   Kokkos::View<double*> h_view("h", M * nbLines);
   Kokkos::View<double*> g_view("g", M * nbLines);
 
-  initData(nbLines, M, rank, g_view);
+  initData(nbLines, M, 0, g_view);
 
   memSize = M * nbLines * 2 * sizeof(double) / (1024 * 1024);
 
   // printf("nbProcs: %d\n", nbProcs);
   // printf("size of double: %d\n", sizeof(double));
 
-  if (rank == 0) {
-    if ( !strong ) {
-      printf( "Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size );
-    } else {
-      printf( "Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size / nbProcs );
-    }
-  }
-  if (rank == 0)
-    printf("Target precision : %f \n", precision);
-  if (rank == 0)
-    printf("Maximum number of iterations : %lu \n", nsteps);
+  printf( "Local data size is %d x %d = %f MB (%lu).\n", M, nbLines, memSize, mem_size );
+  printf("Target precision : %f \n", precision);
+  printf("Maximum number of iterations : %lu \n", nsteps);
 
-  wtime = MPI_Wtime();
+  Kokkos::Timer timer;
+  wtime = timer.seconds();
   int i = 0;
   int v = i;
   printf("i: %d --- v: %d\n", i, v);
@@ -104,33 +79,22 @@ int main(int argc, char *argv[]) {
 
   while(i < nsteps) {
 
-    localerror = doWork(nbProcs, rank, M, nbLines, g_view, h_view);
+    localerror = doWork(1, 0, M, nbLines, g_view, h_view);
 
-    if (((i % ITER_OUT) == 0) && (rank == 0)) {
+    if (((i % ITER_OUT) == 0)) {
       printf("Step : %d, error = %f\n", i, globalerror);
     }
-    if ((i % REDUCED) == 0) {
-      MPI_Allreduce(&localerror, &globalerror, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    }
+    globalerror = localerror;
 
     if (globalerror < precision) {
       printf("PRECISION ERROR\n");
       break;
     }
     i++;
-
-    // if (rank == 0 && i == 301 && v < 0) {
-    if ((fail_iter >= 0 ) && (rank == fail_rank) && (i == fail_iter) && (v < 0)) {
-      printf("Killing rank %d at i == %d.\n", rank, i);
-      MPI_Abort(MPI_COMM_WORLD, 400);
-    }
   }
-  if (rank == 0)
-    printf("Execution finished in %lf seconds.\n", MPI_Wtime() - wtime);
+  printf("Execution finished in %lf seconds.\n", timer.seconds() - wtime);
 
   }
   Kokkos::finalize();
-
-  MPI_Finalize();
   return 0;
 }
