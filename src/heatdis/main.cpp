@@ -1,9 +1,7 @@
 #include <cxxopts/cxxopts.hpp>
 #include <Kokkos_Core.hpp>
-#include <resilience/Resilience.hpp>
 
 #include "heatdis.hpp"
-//#include <resilience/CheckpointFilter.hpp>
 
 using namespace heatdis;
 
@@ -54,8 +52,8 @@ int main(int argc, char *argv[]) {
   M = (int)sqrt((double)(mem_size * 1024.0 * 1024.0) / (2 * sizeof(double))); // two matrices needed
   nbLines = M + 3;
 
-  Kokkos::View<double*> h_view("h", M * nbLines);
-  Kokkos::View<double*> g_view("g", M * nbLines);
+  view_type h_view("h", M * nbLines);
+  view_type g_view("g", M * nbLines);
 
   initData(nbLines, M, 0, g_view);
 

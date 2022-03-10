@@ -2,10 +2,7 @@
 
 namespace heatdis
 {
-  void initData(int nbLines, int M, int rank, Kokkos::View<double*> h) {
-
-    using range_policy = Kokkos::RangePolicy<>;
-
+  void initData(int nbLines, int M, int rank, view_type h) {
     /* set all of the data to 0 */
     int len = nbLines * M;
     Kokkos::parallel_for("init_h", range_policy (0, len),
@@ -26,11 +23,9 @@ namespace heatdis
   }
 
   double doWork(int numprocs, int rank, int M, int nbLines,
-                      Kokkos::View<double*> g, Kokkos::View<double*> h) {
+                      view_type g, view_type h) {
     double localerror;
     localerror = 0;
-
-    using range_policy = Kokkos::RangePolicy<>;
 
     int len = nbLines * M;
     Kokkos::parallel_for("copy_g", range_policy(0, len),
