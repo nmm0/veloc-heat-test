@@ -3,6 +3,7 @@ project(heatdis)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
 
+set(CMAKE_PREFIX_PATH /home/knteran/Kokkos_Haswell;/home/knteran/resilienceKT )
 add_executable(heatdis)
 add_executable(heatdis_resil)
 
